@@ -8,7 +8,25 @@ float angleZeroZ;
 float gyroOffsetX;
 float gyroOffsetY;
 float gyroOffsetZ;
-// ===== State Variables =====
+
+
+// Create Encoder objects (automatically handles interrupts)
+Encoder encoder_right(2, 10);  // Right encoder pins A, B
+Encoder encoder_left(3, 11);   // Left encoder pins A, B
+
+// for timmings
+const float DT = 0.01;  // 10ms loop time 
+unsigned long last_loop_time = 0;
+
+
+// ===== LQR Gains =====
+// K = [k1, k2, k3, k4]
+const float K1 = 0;   // Position gain
+const float K2 = 0;  // Angle gain
+const float K3 = 0;   // Velocity gain
+const float K4 = 0;   // Angular velocity gain
+
+// state variables
 float x1 = 0.0;  // Average wheel position (rad)
 float x2 = 0.0;  // Body pitch angle (rad)
 float x3 = 0.0;  // Average wheel velocity (rad/s)
@@ -33,7 +51,9 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  getimu()
+  getimu();
+  updateEncoders();
+
   
 }
 
@@ -42,8 +62,9 @@ void getimu()
   mpu.update();
   float angle[3] ={mpu.getAngleX() - angleZeroX,mpu.getAngleY()- angleZeroY,mpu.getAngleZ()- angleZeroZ};
   float gyro[3] = {mpu.getGyroX()-gyroOffsetX,mpu.getGyroY()-gyroOffsetY,mpu.getGyroZ()-gyroOffsetZ};
-  x2 = -pitch_radians;      // Body pitch angle (negative to match convention)
-  x4 = -gyro_pitch_rate; 
+  x2 = angle[0];      // Body pitch angle (negative to match convention)
+  x4 =  gyro[0];   // cheak the orientation
+
 }
 
 void updateEncoders() {

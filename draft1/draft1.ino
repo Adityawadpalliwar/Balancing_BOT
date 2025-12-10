@@ -9,15 +9,36 @@ float gyroOffsetX;
 float gyroOffsetY;
 float gyroOffsetZ;
 
+const int buzz  = A1; 
+
+// Right Motor (Motor A)
+#define MOTOR_R_PWM 6    
+const int MOTOR_R_DIR1  = A2;    
+const int MOTOR_R_DIR2 = A3;    
+
+// Left Motor (Motor B)
+#define MOTOR_L_PWM 5    
+#define MOTOR_L_DIR1 9   
+#define MOTOR_L_DIR2 4 
 
 // Create Encoder objects (automatically handles interrupts)
-Encoder encoder_right(2, 10);  // Right encoder pins A, B
-Encoder encoder_left(3, 11);   // Left encoder pins A, B
+Encoder encoder_right(7, 8);  // assuming encoder 1 ( 7,8 ) are channel a and b
+Encoder encoder_left(2, 3);   // Left encoder pins A, B
+
+// Previous values for differentiation
+long prev_encoder_right = 0;
+long prev_encoder_left = 0;
+
 
 // for timmings
 const float DT = 0.01;  // 10ms loop time 
 unsigned long last_loop_time = 0;
+unsigned long prev_time = 0;
 
+// ===== Motor Parameters =====
+const float MAX_PWM = 255.0;
+const float COUNTS_PER_REV = 960.0;  // N20 motor encoder counts per revolution (adjust for your motor)
+const float WHEEL_RADIUS = 0.033;     // Wheel radius in meters (33mm)//i don't know use for this
 
 // ===== LQR Gains =====
 // K = [k1, k2, k3, k4]
@@ -32,40 +53,16 @@ float x2 = 0.0;  // Body pitch angle (rad)
 float x3 = 0.0;  // Average wheel velocity (rad/s)
 float x4 = 0.0;  // Body pitch rate (rad/s)
 
-void setup() {
-  // put your setup code here, to run once:
-  Serial.begin(9600);
-  Wire.begin();
-  mpu.setAddress(0x68);
-  mpu.begin(0, 0);
-  //mpu.setFilterGyroCoef(0.95);(change if wanted)
-  //mpu.setFilterAccCoef(0.02);
-  mpu.calcOffsets();
-  angleZeroX = mpu.getAngleX();
-  angleZeroY = mpu.getAngleY();
-  angleZeroZ = mpu.getAngleZ();
-  gyroOffsetX = mpu.getGyroX();
-  gyroOffsetY = mpu.getGyroY();
-  gyroOffsetZ = mpu.getGyroZ();
-}
-
-void loop() {
-  // put your main code here, to run repeatedly:
-  getimu();
-  updateEncoders();
-
-  
-}
-
 void getimu()
 {
   mpu.update();
   float angle[3] ={mpu.getAngleX() - angleZeroX,mpu.getAngleY()- angleZeroY,mpu.getAngleZ()- angleZeroZ};
   float gyro[3] = {mpu.getGyroX()-gyroOffsetX,mpu.getGyroY()-gyroOffsetY,mpu.getGyroZ()-gyroOffsetZ};
   x2 = angle[0];      // Body pitch angle (negative to match convention)
-  x4 =  gyro[0];   // cheak the orientation
+  x4 = gyro[0];   // cheak the orientation
 
 }
+
 
 void updateEncoders() {
   unsigned long current_time = millis();
@@ -77,8 +74,8 @@ void updateEncoders() {
     long curr_encoder_left = encoder_left.read();
     
     // Calculate velocities (rad/s)
-    float delta_right = (curr_encoder_right - prev_encoder_right) * 2.0 * PI / COUNTS_PER_REV;
-    float delta_left = (curr_encoder_left - prev_encoder_left) * 2.0 * PI / COUNTS_PER_REV;
+    float delta_right = (curr_encoder_right - prev_encoder_right) * 360.0 / COUNTS_PER_REV;
+    float delta_left = (curr_encoder_left - prev_encoder_left) * 360.0 / COUNTS_PER_REV;
     
     float vel_right = delta_right / dt;
     float vel_left = delta_left / dt;
@@ -95,3 +92,90 @@ void updateEncoders() {
     prev_time = current_time;
   }
 }
+void setMotorSpeed(bool isRight, float speed) {
+  // speed range: -255 to 255
+  int pwm_pin = isRight ? MOTOR_R_PWM : MOTOR_L_PWM;
+  int dir_pin1 = isRight ? MOTOR_R_DIR1 : MOTOR_L_DIR1;
+  int dir_pin2 = isRight ? MOTOR_R_DIR2 : MOTOR_L_DIR2;
+  
+  // Constrain speed
+  speed = constrain(speed, -MAX_PWM, MAX_PWM);
+  
+  // Set direction
+  if (speed >= 0) {
+    digitalWrite(dir_pin1, HIGH);
+    digitalWrite(dir_pin2, LOW);
+  } else {
+    digitalWrite(dir_pin1, LOW);
+    digitalWrite(dir_pin2, HIGH);
+    speed = -speed;
+  }
+  
+  // Set PWM
+  analogWrite(pwm_pin, (int)speed);
+}
+
+void stopMotors()
+{
+  setMotorSpeed(true, 0);
+  setMotorSpeed(false, 0);
+}
+
+void computeLQRControl() {
+  
+  float U_balance = -(K1 * x1 + K2 * x2 + K3 * x3 + K4 * x4);
+  
+  // Convert control signal to PWM (scale appropriately)
+  float pwm_scale = 8.0;  // Tune this accordingly
+  float U_right = U_balance * pwm_scale; //(add forward and backward velocity here itself)
+  float U_left = U_balance * pwm_scale;
+  
+  // Safety check: if robot is too tilted, stop motors
+  if (abs(x2) > 0.8) {  // ~45 degrees
+    stopMotors();
+    Serial.println("Robot fell! Stopping motors.");
+    return;
+  }
+  
+  // Apply motor commands
+  setMotorSpeed(true, U_right);
+  setMotorSpeed(false, U_left);
+}
+
+
+
+
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(9600);
+  Wire.begin();
+  mpu.setAddress(0x68);
+  mpu.begin(0, 0);
+  //mpu.setFilterGyroCoef(0.95);(change if wanted)
+  //mpu.setFilterAccCoef(0.02);
+  mpu.calcOffsets();
+  angleZeroX = mpu.getAngleX();
+  angleZeroY = mpu.getAngleY();
+  angleZeroZ = mpu.getAngleZ();
+  gyroOffsetX = mpu.getGyroX();
+  gyroOffsetY = mpu.getGyroY();
+  gyroOffsetZ = mpu.getGyroZ();
+
+  pinMode(buzz, OUTPUT); 
+  pinMode(MOTOR_R_PWM , OUTPUT);   
+  pinMode(MOTOR_L_PWM , OUTPUT);   
+  pinMode(MOTOR_R_DIR1, OUTPUT);
+  pinMode(MOTOR_R_DIR2, OUTPUT);
+  pinMode(MOTOR_L_DIR1, OUTPUT);
+  pinMode(MOTOR_L_DIR2, OUTPUT);
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  getimu();
+  updateEncoders();
+  computeLQRControl();
+
+  
+}
+

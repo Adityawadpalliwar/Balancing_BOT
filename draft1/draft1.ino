@@ -1,13 +1,11 @@
 #include <Wire.h>
 #include <MPU6050_light.h>
+#include <Encoder.h>
 MPU6050 mpu(Wire);
-void getimu();
-float angleZeroX;
+
+
 float angleZeroY;
-float angleZeroZ;
-float gyroOffsetX;
 float gyroOffsetY;
-float gyroOffsetZ;
 
 const int buzz  = A1; 
 
@@ -18,8 +16,8 @@ const int MOTOR_R_DIR2 = A3;
 
 // Left Motor (Motor B)
 #define MOTOR_L_PWM 5    
-#define MOTOR_L_DIR1 9   
-#define MOTOR_L_DIR2 4 
+const int MOTOR_L_DIR1 =9;   
+const int MOTOR_L_DIR2 =4;
 
 // Create Encoder objects (automatically handles interrupts)
 Encoder encoder_right(7, 8);  // assuming encoder 1 ( 7,8 ) are channel a and b
@@ -29,23 +27,22 @@ Encoder encoder_left(2, 3);   // Left encoder pins A, B
 long prev_encoder_right = 0;
 long prev_encoder_left = 0;
 
-
 // for timmings
-const float DT = 0.01;  // 10ms loop time 
+const float DT = 0.01f;  // 10ms loop time 
 unsigned long last_loop_time = 0;
 unsigned long prev_time = 0;
 
 // ===== Motor Parameters =====
 const float MAX_PWM = 255.0;
 const float COUNTS_PER_REV = 960.0;  // N20 motor encoder counts per revolution (adjust for your motor)
-const float WHEEL_RADIUS = 0.033;     // Wheel radius in meters (33mm)//i don't know use for this
+ 
 
 // ===== LQR Gains =====
 // K = [k1, k2, k3, k4]
 const float K1 = 0;   // Position gain
-const float K2 = 0;  // Angle gain
-const float K3 = 0;   // Velocity gain
-const float K4 = 0;   // Angular velocity gain
+const float K2 = -25.0;  // Angle gain
+const float K3 = -1.2;   // Velocity gain
+const float K4 = -4.5;   // Angular velocity gain
 
 // state variables
 float x1 = 0.0;  // Average wheel position (rad)
@@ -56,10 +53,8 @@ float x4 = 0.0;  // Body pitch rate (rad/s)
 void getimu()
 {
   mpu.update();
-  float angle[3] ={mpu.getAngleX() - angleZeroX,mpu.getAngleY()- angleZeroY,mpu.getAngleZ()- angleZeroZ};
-  float gyro[3] = {mpu.getGyroX()-gyroOffsetX,mpu.getGyroY()-gyroOffsetY,mpu.getGyroZ()-gyroOffsetZ};
-  x2 = angle[0];      // Body pitch angle (negative to match convention)
-  x4 = gyro[0];   // cheak the orientation
+  x2 = mpu.getAngleY()- angleZeroY;      // Body pitch angle (check sign)
+  x4 = (mpu.getGyroY()-gyroOffsetY)*PI/180.0;   // cheak the orientation
 
 }
 
@@ -74,8 +69,8 @@ void updateEncoders() {
     long curr_encoder_left = encoder_left.read();
     
     // Calculate velocities (rad/s)
-    float delta_right = (curr_encoder_right - prev_encoder_right) * 360.0 / COUNTS_PER_REV;
-    float delta_left = (curr_encoder_left - prev_encoder_left) * 360.0 / COUNTS_PER_REV;
+    float delta_right = (curr_encoder_right - prev_encoder_right)  * 2.0* PI / COUNTS_PER_REV;
+    float delta_left = (curr_encoder_left - prev_encoder_left) * 2.0* PI/ COUNTS_PER_REV;
     
     float vel_right = delta_right / dt;
     float vel_left = delta_left / dt;
@@ -154,13 +149,8 @@ void setup() {
   //mpu.setFilterGyroCoef(0.95);(change if wanted)
   //mpu.setFilterAccCoef(0.02);
   mpu.calcOffsets();
-  angleZeroX = mpu.getAngleX();
   angleZeroY = mpu.getAngleY();
-  angleZeroZ = mpu.getAngleZ();
-  gyroOffsetX = mpu.getGyroX();
   gyroOffsetY = mpu.getGyroY();
-  gyroOffsetZ = mpu.getGyroZ();
-
   pinMode(buzz, OUTPUT); 
   pinMode(MOTOR_R_PWM , OUTPUT);   
   pinMode(MOTOR_L_PWM , OUTPUT);   
@@ -172,10 +162,17 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
+
+  unsigned long current_time = micros();
+  
+  // Run control loop at fixed rate (100Hz)
+  if (current_time - last_loop_time >= DT * 1000000) {
+    last_loop_time = current_time;
+  
   getimu();
   updateEncoders();
   computeLQRControl();
-
+  }
   
 }
 

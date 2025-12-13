@@ -103,11 +103,11 @@ void setMotorSpeed(bool isRight, float speed) {
   
   // Set direction
   if (speed >= 0) {
-    digitalWrite(dir_pin1, HIGH);
-    digitalWrite(dir_pin2, LOW);
-  } else {
     digitalWrite(dir_pin1, LOW);
     digitalWrite(dir_pin2, HIGH);
+  } else {
+    digitalWrite(dir_pin1, HIGH);
+    digitalWrite(dir_pin2, LOW);
     speed = -speed;
   }
   

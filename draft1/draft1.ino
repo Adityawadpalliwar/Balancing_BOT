@@ -4,12 +4,12 @@
 MPU6050 mpu(Wire);
 
 
-float angleZeroY;
-float gyroOffsetY;
+//float angleZeroY;
+//float gyroOffsetY;
 
 const int buzz  = A1; 
 
-// Right Motor (Motor A)
+// Right Motor (Motor A)(right) you view gripper in your frame of reference 
 #define MOTOR_R_PWM 6    
 const int MOTOR_R_DIR1  = A2;    
 const int MOTOR_R_DIR2 = A3;    
@@ -53,8 +53,8 @@ float x4 = 0.0;  // Body pitch rate (rad/s)
 void getimu()
 {
   mpu.update();
-  x2 = mpu.getAngleY()- angleZeroY;      // Body pitch angle (check sign)
-  x4 = (mpu.getGyroY()-gyroOffsetY)*PI/180.0;   // cheak the orientation
+  x2 = mpu.getAngleY()* PI / 180.0;      // Body pitch angle (check sign)// if this doesn't work the use 
+  x4 = mpu.getGyroY()*PI/180.0;   // cheak the orientation  (mpu.getAngleY()- angleZeroY)* PI / 180.0; 
 
 }
 
@@ -149,8 +149,7 @@ void setup() {
   //mpu.setFilterGyroCoef(0.95);(change if wanted)
   //mpu.setFilterAccCoef(0.02);
   mpu.calcOffsets();
-  angleZeroY = mpu.getAngleY();
-  gyroOffsetY = mpu.getGyroY();
+ 
   pinMode(buzz, OUTPUT); 
   pinMode(MOTOR_R_PWM , OUTPUT);   
   pinMode(MOTOR_L_PWM , OUTPUT);   

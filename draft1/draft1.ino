@@ -36,7 +36,7 @@ unsigned long prev_time = 0;
 
 // ===== Motor Parameters =====
 const float MAX_PWM = 255.0;
-const float COUNTS_PER_REV = 700.0;  // N20 motor encoder counts per revolution (adjust for your motor)
+const float COUNTS_PER_REV = 705.0;  // N20 motor encoder counts per revolution (adjust for your motor)
  
 
 // ===== LQR Gains =====

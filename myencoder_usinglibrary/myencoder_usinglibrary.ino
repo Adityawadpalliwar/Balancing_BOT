@@ -5,7 +5,7 @@
 
 // Create encoder objects
 Encoder rightEncoder(8,7);
-Encoder leftEncoder(2, 3);
+Encoder leftEncoder(2,3);
 
 // Pulse count variables
 long wheel_pulse_count_left  = 0;

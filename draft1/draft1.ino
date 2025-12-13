@@ -10,7 +10,8 @@ MPU6050 mpu(Wire);
 
 const int buzz  = A1; 
 
-// Right Motor (Motor A)(right) you view gripper in your frame of reference 
+// Right Motor (Motor A)(right) 
+// in your view gripper should be on left  your frame of reference 
 #define MOTOR_R_PWM 6    
 const int MOTOR_R_DIR1  = A2;    
 const int MOTOR_R_DIR2 = A3;    

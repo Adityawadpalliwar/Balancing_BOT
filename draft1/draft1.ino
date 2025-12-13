@@ -4,6 +4,7 @@
 MPU6050 mpu(Wire);
 
 
+
 //float angleZeroY;
 //float gyroOffsetY;
 
@@ -34,7 +35,7 @@ unsigned long prev_time = 0;
 
 // ===== Motor Parameters =====
 const float MAX_PWM = 255.0;
-const float COUNTS_PER_REV = 960.0;  // N20 motor encoder counts per revolution (adjust for your motor)
+const float COUNTS_PER_REV = 700.0;  // N20 motor encoder counts per revolution (adjust for your motor)
  
 
 // ===== LQR Gains =====
@@ -53,7 +54,7 @@ float x4 = 0.0;  // Body pitch rate (rad/s)
 void getimu()
 {
   mpu.update();
-  x2 = mpu.getAngleY()* PI / 180.0;      // Body pitch angle (check sign)// if this doesn't work the use 
+  x2 = mpu.getAngleY()* PI/ 180.0;      // Body pitch angle (check sign)// if this doesn't work the use 
   x4 = mpu.getGyroY()*PI/180.0;   // cheak the orientation  (mpu.getAngleY()- angleZeroY)* PI / 180.0; 
 
 }
@@ -149,6 +150,11 @@ void setup() {
   //mpu.setFilterGyroCoef(0.95);(change if wanted)
   //mpu.setFilterAccCoef(0.02);
   mpu.calcOffsets();
+
+  pinMode(2, INPUT_PULLUP);
+  pinMode(3, INPUT_PULLUP);
+  pinMode(7, INPUT_PULLUP);
+  pinMode(8, INPUT_PULLUP);
  
   pinMode(buzz, OUTPUT); 
   pinMode(MOTOR_R_PWM , OUTPUT);   

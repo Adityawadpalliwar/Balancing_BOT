@@ -1,9 +1,9 @@
 // Define encoder pins
-#define encodPinAR 7  // Encoder A pin (C2) // A1
-#define encodPinBR 2   // Encoder B pin (C1) // A2//2
+#define encodPinAR 2  // Encoder A pin (C2) // A1
+#define encodPinBR 7  // Encoder B pin (C1) // A2//2
 
-#define encodPinAL 8  // Encoder A pin (C2) ------ working
-#define encodPinBL 3   // Encoder B pin (C1) ------ working
+#define encodPinAL 3  // Encoder A pin (C2) ------ working
+#define encodPinBL 8   // Encoder B pin (C1) ------ working
 
 // // Define encoder pins
 // #define encodPinAR 7  // Encoder A pin (C2) // A1

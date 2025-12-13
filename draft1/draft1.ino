@@ -2,7 +2,7 @@
 #include <MPU6050_light.h>
 #include <Encoder.h>
 MPU6050 mpu(Wire);
-
+unsigned long timer = 0;
 
 
 //float angleZeroY;
@@ -18,8 +18,8 @@ const int MOTOR_R_DIR2 = A3;
 
 // Left Motor (Motor B)
 #define MOTOR_L_PWM 5    
-const int MOTOR_L_DIR1 =9;   
-const int MOTOR_L_DIR2 =4;
+const int MOTOR_L_DIR1 =4;   
+const int MOTOR_L_DIR2 =9;
 
 // Create Encoder objects if interupt is detected then it wll use it 
 Encoder encoder_right(8, 7);  // assuming encoder 1 ( 7,8 ) are channel a and b
@@ -55,9 +55,12 @@ float x4 = 0.0;  // Body pitch rate (rad/s)
 void getimu()
 {
   mpu.update();
-  x2 = mpu.getAngleY()* PI/ 180.0;      // Body pitch angle (check sign)// if this doesn't work the use 
-  x4 = mpu.getGyroY()*PI/180.0;   // cheak the orientation  (mpu.getAngleY()- angleZeroY)* PI / 180.0; 
-
+  
+  if((millis()-timer)>10){ // print data every 10ms
+	x2 = -mpu.getAngleY()* PI/ 180.0;      // Body pitch angle (check sign)// if this doesn't work the use 
+  x4 = -mpu.getGyroY()*PI/180.0;   // cheak the orientation  (mpu.getAngleY()- angleZeroY)* PI / 180.0; 
+	timer = millis();  
+  }
 }
 
 

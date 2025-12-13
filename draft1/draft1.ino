@@ -20,8 +20,8 @@ const int MOTOR_R_DIR2 = A3;
 const int MOTOR_L_DIR1 =9;   
 const int MOTOR_L_DIR2 =4;
 
-// Create Encoder objects (automatically handles interrupts)
-Encoder encoder_right(7, 8);  // assuming encoder 1 ( 7,8 ) are channel a and b
+// Create Encoder objects if interupt is detected then it wll use it 
+Encoder encoder_right(8, 7);  // assuming encoder 1 ( 7,8 ) are channel a and b
 Encoder encoder_left(2, 3);   // Left encoder pins A, B
 
 // Previous values for differentiation

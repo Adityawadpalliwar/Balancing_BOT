@@ -4,15 +4,17 @@
 MPU6050 mpu(Wire);
 unsigned long timer = 0;
 
-#define encodPinAR 2   
-#define encodPinBR 3   
-#define encodPinAL 8  
-#define encodPinBL 7
+#define encodPinAR 8
+#define encodPinBR 7
+#define encodPinAL 2
+#define encodPinBL 3
 
 //float angleZeroY;
 //float gyroOffsetY;
 
 const int buzz  = A1; 
+unsigned long imuTimer= 0;
+unsigned long printTimer  = 0; 
 
 // Right Motor (Motor A)(right) 
 // in your view gripper should be on left  your frame of reference 
@@ -73,19 +75,22 @@ void getimu()
 
 void updateEncoders() {
   unsigned long current_time = millis();
+
   float dt = (current_time - prev_time) / 1000.0;  // Convert to seconds
   
-
+  // Right encoder
   int aR = digitalRead(encodPinAR);
-  if (prevA_right == LOW && aR == HIGH) {     
+  if (prevA_right == LOW && aR == HIGH) {
     if (digitalRead(encodPinBR) == HIGH) wheel_pulse_count_right++;
-    else wheel_pulse_count_right--;
+    else                                 wheel_pulse_count_right--;
   }
   prevA_right = aR;
- int aL = digitalRead(encodPinAL);
-  if (prevA_left == LOW && aL == HIGH) {     
+
+  // Left encoder
+  int aL = digitalRead(encodPinAL);
+  if (prevA_left == LOW && aL == HIGH) {
     if (digitalRead(encodPinBL) == HIGH) wheel_pulse_count_left++;
-    else wheel_pulse_count_left--;
+    else                                 wheel_pulse_count_left--;
   }
   prevA_left = aL;
  //static unsigned long lastPrint = 0;
@@ -95,16 +100,17 @@ void updateEncoders() {
    // Serial.print(" ; ");
    // Serial.println(wheel_pulse_count_right);
   //}
-
+  
   if (dt >= DT) {
     // Read encoder counts (Encoder library handles everything automatically)
     long curr_encoder_right = wheel_pulse_count_right;
     long curr_encoder_left = wheel_pulse_count_left;
     
-    Serial.print("the right encoder is at: ");
-    Serial.println(curr_encoder_right);
-    Serial.print("the left encoder is at: ");
-    Serial.println(curr_encoder_left);
+    //Serial.print("the right encoder is at: ");
+    //Serial.print(curr_encoder_right);
+    //Serial.print(" , ");
+    //Serial.print("the left encoder is at: ");
+    //Serial.println(curr_encoder_left);
     // Calculate velocities (rad/s)
     float delta_right = (curr_encoder_right - prev_encoder_right)  * 2.0* PI / COUNTS_PER_REV;
     float delta_left = (curr_encoder_left - prev_encoder_left) * 2.0* PI/ COUNTS_PER_REV;
@@ -122,7 +128,11 @@ void updateEncoders() {
     prev_encoder_right = curr_encoder_right;
     prev_encoder_left = curr_encoder_left;
     prev_time = current_time;
+    //Serial.print(x3);
+    //Serial.print(" , ");
+    //Serial.print(x1);
   }
+    
 }
 void setMotorSpeed(bool isRight, float speed) {
   // speed range: -255 to 255
@@ -131,8 +141,8 @@ void setMotorSpeed(bool isRight, float speed) {
   int dir_pin2 = isRight ? MOTOR_R_DIR2 : MOTOR_L_DIR2;
   
   // Constrain speed
-  speed = constrain(speed, -MAX_PWM, MAX_PWM);
-  
+
+  analogWrite(pwm_pin, (int)speed);
   // Set direction
   if (speed >= 0) {
     digitalWrite(dir_pin1, LOW);
@@ -143,8 +153,7 @@ void setMotorSpeed(bool isRight, float speed) {
     speed = -speed;
   }
   
-  // Set PWM
-  analogWrite(pwm_pin, (int)speed);
+  
 }
 
 void stopMotors()
@@ -157,11 +166,13 @@ void computeLQRControl() {
   
   float U_balance = -(K1 * x1 + K2 * x2 + K3 * x3 + K4 * x4);
 
+  int U_int = (int)U_balance;
+  float U_new = map(constrain(U_int, -800, 800), -800, 800, -200, 200);
   
   // Convert control signal to PWM (scale appropriately)
   //float pwm_scale = 10.0;  // Tune this accordingly
-  float U_right = (U_balance)*51.0/0.022; //(add forward and backward velocity here itself)
-  float U_left = (U_balance)*51.0/0.022;
+  float U_right = (U_balance); //(cheack this)
+  float U_left = (U_balance);
   
   // Safety check: if robot is too tilted, stop motors
   if (abs(x2) > 22) {  // 22degrees
@@ -171,8 +182,8 @@ void computeLQRControl() {
   }
   
   // Apply motor commands
-  //setMotorSpeed(true, U_right);
-  //setMotorSpeed(false, U_left);
+  setMotorSpeed(true, U_right);
+  setMotorSpeed(false, U_left);
 }
 
 
@@ -203,6 +214,9 @@ void setup() {
   
    prevA_right = digitalRead(encodPinAR);
    prevA_left  = digitalRead(encodPinAL);
+   imuTimer   = millis();
+   printTimer = millis();
+   
 
 
 }
@@ -210,16 +224,25 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
 
-  unsigned long current_time = micros();
   
-  // Run control loop at fixed rate (100Hz)
-  if (current_time - last_loop_time >= DT * 1000000) {
-    last_loop_time = current_time;
-  
-  getimu();
+  unsigned long now = millis();
+
+  // 1) Always service encoders
   updateEncoders();
-  computeLQRControl();
+
+  // 2) IMU update every 5 ms
+  if (now - imuTimer >= 5) {     // 5 ms period → 200 Hz
+    imuTimer = now;
+    getimu();
   }
+  /*if (now - printTimer >= 20) {
+    printTimer = now;
+    Serial.print("L: ");
+    Serial.print(wheel_pulse_count_left);
+    Serial.print("  R: ");
+    Serial.println(wheel_pulse_count_right);
+  }*/
+  
   
 }
 

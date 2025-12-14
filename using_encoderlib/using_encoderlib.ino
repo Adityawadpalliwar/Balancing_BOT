@@ -1,13 +1,9 @@
 #include <Wire.h>
 #include <MPU6050_light.h>
-
+#include <Encoder.h>
 MPU6050 mpu(Wire);
 unsigned long timer = 0;
 
-#define encodPinAR 2   
-#define encodPinBR 3   
-#define encodPinAL 8  
-#define encodPinBL 7
 
 //float angleZeroY;
 //float gyroOffsetY;
@@ -17,15 +13,17 @@ const int buzz  = A1;
 // Right Motor (Motor A)(right) 
 // in your view gripper should be on left  your frame of reference 
 #define MOTOR_R_PWM 6    
-const int MOTOR_R_DIR1 = A2;    
+const int MOTOR_R_DIR1  = A2;    
 const int MOTOR_R_DIR2 = A3;    
 
-// Left Motor (Motor B)G%HY ZSV
+// Left Motor (Motor B)
 #define MOTOR_L_PWM 5    
 const int MOTOR_L_DIR1 =4;   
 const int MOTOR_L_DIR2 =9;
 
-
+// Create Encoder objects if interupt is detected then it wll use it 
+Encoder encoder_right(8, 7);  // assuming encoder 1 ( 7,8 ) are channel a and b
+Encoder encoder_left(2, 3);   // Left encoder pins A, B
 
 // Previous values for differentiation
 long prev_encoder_right = 0;
@@ -38,20 +36,15 @@ unsigned long prev_time = 0;
 
 // ===== Motor Parameters =====
 const float MAX_PWM = 255.0;
-const float COUNTS_PER_REV = 700.0;  // N20 motor encoder counts per revolution (adjust for your motor)//correct
-
-
-volatile long wheel_pulse_count_left = 0;
-volatile long wheel_pulse_count_right = 0;
-int prevA_right = LOW;
-int prevA_left  = LOW;
+const float COUNTS_PER_REV = 705.0;  // N20 motor encoder counts per revolution (adjust for your motor)
+ 
 
 // ===== LQR Gains =====
 // K = [k1, k2, k3, k4]
-const float K1 = -13.823;   // Position gain
-const float K2 = -142.5969;  // Angle gain
-const float K3 = -5.4460;   // Velocity gain
-const float K4 = -28.880;   // Angular velocity gain
+const float K1 = 0;   // Position gain
+const float K2 = -25.0;  // Angle gain
+const float K3 = -1.2;   // Velocity gain
+const float K4 = -4.5;   // Angular velocity gain
 
 // state variables
 float x1 = 0.0;  // Average wheel position (rad)
@@ -64,7 +57,7 @@ void getimu()
   mpu.update();
   
   if((millis()-timer)>10){ // print data every 10ms
-	x2 = -mpu.getAngleY()* PI/180.0;      // Body pitch angle (check sign)// if this doesn't work the use 
+	x2 = -mpu.getAngleY()* PI/ 180.0;      // Body pitch angle (check sign)// if this doesn't work the use 
   x4 = -mpu.getGyroY()*PI/180.0;   // cheak the orientation  (mpu.getAngleY()- angleZeroY)* PI / 180.0; 
 	timer = millis();  
   }
@@ -75,36 +68,11 @@ void updateEncoders() {
   unsigned long current_time = millis();
   float dt = (current_time - prev_time) / 1000.0;  // Convert to seconds
   
-
-  int aR = digitalRead(encodPinAR);
-  if (prevA_right == LOW && aR == HIGH) {     
-    if (digitalRead(encodPinBR) == HIGH) wheel_pulse_count_right++;
-    else wheel_pulse_count_right--;
-  }
-  prevA_right = aR;
- int aL = digitalRead(encodPinAL);
-  if (prevA_left == LOW && aL == HIGH) {     
-    if (digitalRead(encodPinBL) == HIGH) wheel_pulse_count_left++;
-    else wheel_pulse_count_left--;
-  }
-  prevA_left = aL;
- //static unsigned long lastPrint = 0;
-  //if (millis() - lastPrint >= 20) { 
-  //  lastPrint = millis();
-   // Serial.print(wheel_pulse_count_left);
-   // Serial.print(" ; ");
-   // Serial.println(wheel_pulse_count_right);
-  //}
-
   if (dt >= DT) {
     // Read encoder counts (Encoder library handles everything automatically)
-    long curr_encoder_right = wheel_pulse_count_right;
-    long curr_encoder_left = wheel_pulse_count_left;
+    long curr_encoder_right = encoder_right.read();
+    long curr_encoder_left = encoder_left.read();
     
-    Serial.print("the right encoder is at: ");
-    Serial.println(curr_encoder_right);
-    Serial.print("the left encoder is at: ");
-    Serial.println(curr_encoder_left);
     // Calculate velocities (rad/s)
     float delta_right = (curr_encoder_right - prev_encoder_right)  * 2.0* PI / COUNTS_PER_REV;
     float delta_left = (curr_encoder_left - prev_encoder_left) * 2.0* PI/ COUNTS_PER_REV;
@@ -160,19 +128,19 @@ void computeLQRControl() {
   
   // Convert control signal to PWM (scale appropriately)
   //float pwm_scale = 10.0;  // Tune this accordingly
-  float U_right = (U_balance)*51.0/0.022; //(add forward and backward velocity here itself)
-  float U_left = (U_balance)*51.0/0.022;
+  float U_right = (U_balance)*51.0/0.022 ; //(add forward and backward velocity here itself)
+  float U_left = (U_balance)*51/0.022 ;
   
   // Safety check: if robot is too tilted, stop motors
-  if (abs(x2) > 22) {  // 22degrees
+  if (abs(x2) > 22) {  // ~45 degrees
     stopMotors();
     Serial.println("Robot fell! Stopping motors.");
     return;
   }
   
   // Apply motor commands
-  //setMotorSpeed(true, U_right);
-  //setMotorSpeed(false, U_left);
+  setMotorSpeed(true, U_right);
+  setMotorSpeed(false, U_left);
 }
 
 
@@ -200,11 +168,6 @@ void setup() {
   pinMode(MOTOR_R_DIR2, OUTPUT);
   pinMode(MOTOR_L_DIR1, OUTPUT);
   pinMode(MOTOR_L_DIR2, OUTPUT);
-  
-   prevA_right = digitalRead(encodPinAR);
-   prevA_left  = digitalRead(encodPinAL);
-
-
 }
 
 void loop() {
@@ -222,4 +185,3 @@ void loop() {
   }
   
 }
-

@@ -17,8 +17,8 @@ void setup(){
 void loop(){
   mpu.update();
   if((millis()-timer)>10){ // print data every 10ms
-	float angle = mpu.getAngleY();
-  float gyro = mpu.getGyroY();
+	float angle = (mpu.getAngleY())*PI/180.0;
+  float gyro = mpu.getGyroY()*PI/180.0;
   Serial.print("angle along y is : ");
   Serial.println(angle);
   Serial.print("velocity along y is :");

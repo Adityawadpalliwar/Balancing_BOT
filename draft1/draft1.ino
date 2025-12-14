@@ -126,12 +126,12 @@ void computeLQRControl() {
   float U_balance = -(K1 * x1 + K2 * x2 + K3 * x3 + K4 * x4);
   
   // Convert control signal to PWM (scale appropriately)
-  float pwm_scale = 8.0;  // Tune this accordingly
+  float pwm_scale = 10.0;  // Tune this accordingly
   float U_right = U_balance * pwm_scale; //(add forward and backward velocity here itself)
   float U_left = U_balance * pwm_scale;
   
   // Safety check: if robot is too tilted, stop motors
-  if (abs(x2) > 0.8) {  // ~45 degrees
+  if (abs(x2) > 22) {  // ~45 degrees
     stopMotors();
     Serial.println("Robot fell! Stopping motors.");
     return;

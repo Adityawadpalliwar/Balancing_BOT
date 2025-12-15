@@ -50,10 +50,10 @@ int prevA_left  = LOW;
 
 // ===== LQR Gains =====
 // K = [k1, k2, k3, k4]
-const float K1 = -13.823;   // Position gain
-const float K2 = -142.5969;  // Angle gain
-const float K3 = -5.4460;   // Velocity gain
-const float K4 = -28.880;   // Angular velocity gain
+const float K1 = -660.7;   // Position gain
+const float K2 = -6855.2;  // Angle gain
+const float K3 = -262.5;   // Velocity gain
+const float K4 = -1244.6;   // Angular velocity gain
 
 // state variables
 float x1 = 0.0;  // Average wheel position (rad)
@@ -66,8 +66,8 @@ void getimu()
   mpu.update();
   
   if((millis()-timer)>10){ // print data every 10ms
-	x2 = -mpu.getAngleY()* PI/180.0;      // Body pitch angle (check sign)// if this doesn't work the use 
-  x4 = -mpu.getGyroY()*PI/180.0;   // cheak the orientation  (mpu.getAngleY()- angleZeroY)* PI / 180.0; 
+	x2 = mpu.getAngleY()* PI/180.0;      // Body pitch angle (check sign)// if this doesn't work the use 
+  x4 = mpu.getGyroY()*PI/180.0;   // cheak the orientation  (mpu.getAngleY()- angleZeroY)* PI / 180.0; 
 	timer = millis();  
   }
 }
@@ -167,8 +167,8 @@ void computeLQRControl() {
   float U_balance = -(K1 * x1 + K2 * x2 + K3 * x3 + K4 * x4);
 
   int U_int = (int)U_balance;
-  float U_new = map(constrain(U_int, -800, 800), -800, 800, -200, 200);
-  
+  float U_new = map(constrain(U_int, -400, 400), -400, 400, -200, 200);
+  Serial.println(U_new);
   // Convert control signal to PWM (scale appropriately)
   //float pwm_scale = 10.0;  // Tune this accordingly
   float U_right = (U_balance); //(cheack this)
@@ -235,13 +235,14 @@ void loop() {
     imuTimer = now;
     getimu();
   }
-  /*if (now - printTimer >= 20) {
+  if (now - printTimer >= 10) {
     printTimer = now;
-    Serial.print("L: ");
-    Serial.print(wheel_pulse_count_left);
-    Serial.print("  R: ");
-    Serial.println(wheel_pulse_count_right);
-  }*/
+    computeLQRControl();
+    //Serial.print("L: ");
+    //Serial.print(wheel_pulse_count_left);
+    //Serial.print("  R: ");
+    //Serial.println(wheel_pulse_count_right);
+  }
   
   
 }

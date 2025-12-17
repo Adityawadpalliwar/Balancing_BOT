@@ -42,17 +42,17 @@ volatile long wheel_pulse_count_right = 0;
 int prevA_right = LOW;
 int prevA_left = LOW;
 
-// ===== TWO-LOOP CASCADE PID GAINS =====
+// PID PARAMENTERS
 
-// VEL PID (outputs desired pitch angle)
-float Kp_vel = 0;      // Position proportional gain
-float Ki_vel = 0;      // Position integral gain (keep 0 for balancing)
-float Kd_vel = 0;      // Position derivative gain
+// Velocity PID 
+float Kp_vel = 0;      
+float Ki_vel = 0;     
+float Kd_vel = 0;      
 
-// INNER LOOP - Pitch PID (outputs motor PWM)
-float Kp_pitch = 1400.0;   // Pitch proportional gain (MAIN TUNING PARAMETER)
-float Ki_pitch = 0.0;    // Pitch integral gain (usually 0)
-float Kd_pitch = 0.0;    // Pitch derivative gain (damping)
+//Pitch PID 
+float Kp_pitch = 2100.0;   
+float Ki_pitch = 2.0;    
+float Kd_pitch = 15.0;    
 
 // Setpoints
 float vel_setpoint = 0.0;    // Desired position (rad) - where robot should be

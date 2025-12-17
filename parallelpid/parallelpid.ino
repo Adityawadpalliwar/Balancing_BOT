@@ -11,7 +11,7 @@ unsigned long timer = 0;
 
 const int buzz = A1; 
 unsigned long imuTimer = 0;
-unsigned long printTimer = 0; 
+unsigned long controlTimer = 0; 
 
 // Right Motor (Motor A)
 #define MOTOR_R_PWM 6    
@@ -29,6 +29,7 @@ long prev_encoder_left = 0;
 
 // For timings
 const float DT = 0.01f;  // 10ms loop time 
+const float dt = 0.01f;
 unsigned long last_loop_time = 0;
 unsigned long prev_time = 0;
 
@@ -41,12 +42,36 @@ volatile long wheel_pulse_count_right = 0;
 int prevA_right = LOW;
 int prevA_left = LOW;
 
-// ===== LQR Gains =====
-const float K1 = -0.4472;
-const float K2 = -24.9862;
-const float K3 = -0.5777;
-const float K4 = -4.6133;
+// ===== TWO-LOOP CASCADE PID GAINS =====
 
+// VEL PID (outputs desired pitch angle)
+float Kp_vel = 0;      // Position proportional gain
+float Ki_vel = 0;      // Position integral gain (keep 0 for balancing)
+float Kd_vel = 0;      // Position derivative gain
+
+// INNER LOOP - Pitch PID (outputs motor PWM)
+float Kp_pitch = 1400.0;   // Pitch proportional gain (MAIN TUNING PARAMETER)
+float Ki_pitch = 0.0;    // Pitch integral gain (usually 0)
+float Kd_pitch = 0.0;    // Pitch derivative gain (damping)
+
+// Setpoints
+float vel_setpoint = 0.0;    // Desired position (rad) - where robot should be
+float pitch_setpoint = 0.0;       // Desired pitch from position PID (rad)
+
+
+// PID CONSTANTS
+float error_pitch=0,err_int_pitch=0,err_der_pitch=0,control_pitch=0,err_prev_pitch=0;
+float error_vel=0,err_int_vel=0,err_der_vel=0,control_vel=0,err_prev_vel=0;
+
+// OUTER LOOP - Position PID variables
+float position_error = 0.0;
+float position_error_sum = 0.0;
+float position_error_prev = 0.0;
+
+// INNER LOOP - Pitch PID variables
+float pitch_error = 0.0;
+float pitch_error_sum = 0.0;
+float pitch_error_prev = 0.0;
 
 // State variables
 float x1 = 0.0;  // Average wheel position (rad)
@@ -54,23 +79,24 @@ float x2 = 0.0;  // Body pitch angle (rad)
 float x3 = 0.0;  // Average wheel velocity (rad/s)
 float x4 = 0.0;  // Body pitch rate (rad/s)
 
-// MPU offset (calibrate this for your robot)
-float angleZeroY = 0.0;  // Set this to the angle when robot is balanced
+// MPU offset
+float angleZeroY = 0.0;  // Balanced angle offset
 
 void getimu() {
   mpu.update();
   
   // Get pitch angle and angular velocity
-  // Convert to radians and apply offset
-  x2 = (mpu.getAngleY() - angleZeroY) * PI / 180.0;  // Body pitch angle
+  x2 = (mpu.getAngleY() - angleZeroY) * PI / 180.0;  // Body pitch angle (rad)
+
+  Serial.println(x2);
   x4 = mpu.getGyroY() * PI / 180.0;                   // Body pitch rate (rad/s)
 }
 
 void updateEncoders() {
   unsigned long current_time = millis();
-  float dt = (current_time - prev_time) / 1000.0;  // Convert to seconds
+  float dt = (current_time - prev_time) / 1000.0;
   
-  // Right encoder - polling method
+  // Right encoder
   int aR = digitalRead(encodPinAR);
   if (prevA_right == LOW && aR == HIGH) {
     if (digitalRead(encodPinBR) == HIGH) {
@@ -81,35 +107,34 @@ void updateEncoders() {
   }
   prevA_right = aR;
 
-  // Left encoder - polling method
+  // Left encoder
   int aL = digitalRead(encodPinAL);
   if (prevA_left == LOW && aL == HIGH) {
     if (digitalRead(encodPinBL) == HIGH) {
-      wheel_pulse_count_left--;  // Note: reversed direction
+      wheel_pulse_count_left--;
     } else {
       wheel_pulse_count_left++;
     }
   }
   prevA_left = aL;
   
-  // Calculate velocities and position at DT intervals
+  // Calculate velocities and position
   if (dt >= DT) {
-    // Read encoder counts
     long curr_encoder_right = wheel_pulse_count_right;
     long curr_encoder_left = wheel_pulse_count_left;
     
-    // Calculate angular displacement (rad)
+    // Angular displacement (rad)
     float delta_right = (curr_encoder_right - prev_encoder_right) * 2.0 * PI / COUNTS_PER_REV;
     float delta_left = (curr_encoder_left - prev_encoder_left) * 2.0 * PI / COUNTS_PER_REV;
     
-    // Calculate angular velocities (rad/s)
+    // Angular velocities (rad/s)
     float vel_right = delta_right / dt;
     float vel_left = delta_left / dt;
     
     // Update state variables
-    x3 = (vel_right + vel_left) / 2.0;  // Average velocity (rad/s)
-    x1 += x3 * dt;  // Integrate to get position (rad)
-    
+    x3 = (vel_right + vel_left) / 2.0;  // Average velocity
+    x1 += x3 * dt;  // Integrate to get position
+    Serial.println(x3);
     // Store previous values
     prev_encoder_right = curr_encoder_right;
     prev_encoder_left = curr_encoder_left;
@@ -122,10 +147,8 @@ void setMotorSpeed(bool isRight, float speed) {
   int dir_pin1 = isRight ? MOTOR_R_DIR1 : MOTOR_L_DIR1;
   int dir_pin2 = isRight ? MOTOR_R_DIR2 : MOTOR_L_DIR2;
   
-  // Constrain speed to valid PWM range
   speed = constrain(speed, -MAX_PWM, MAX_PWM);
   
-  // Set direction based on sign
   if (speed >= 0) {
     digitalWrite(dir_pin1, LOW);
     digitalWrite(dir_pin2, HIGH);
@@ -142,59 +165,70 @@ void stopMotors() {
   setMotorSpeed(false, 0);
 }
 
-void computeLQRControl() {
-  // LQR control law: U = -K * x
-  float U_balance = -(K1 * x1 + K2 * x2 + K3 * x3 + K4 * x4);
-  
-  // Safety check: if robot is too tilted, stop motors
-  if (abs(x2 * 180.0 / PI) > 45.0) {  // Convert to degrees for check (45 degrees)
+void computeCascadePID() {
+  // Safety check
+  if (abs(x2 * 180.0 / PI) > 45.0) {  // 45 degrees
     stopMotors();
-    Serial.println("Robot fell! Stopping motors.");
+    
+    // Reset integral terms
+    position_error_sum = 0.0;
+    pitch_error_sum = 0.0;
+    
+    //Serial.println("Robot fell! Stopping motors.");
     return;
   }
+  // pitch pid
+  error_pitch = pitch_setpoint - x2;
+  err_int_pitch += (error_pitch * dt);
+  err_der_pitch = (error_pitch - err_prev_pitch) / (dt);
+  control_pitch = (Kp_pitch * error_pitch) + (Ki_pitch * err_int_pitch) + (Kd_pitch * err_der_pitch);
+  err_prev_pitch = error_pitch;
+
+
+  //vel pid
+  error_vel = vel_setpoint - x3;
+  err_int_vel += (error_vel * dt);
+  err_der_vel = (error_vel - err_prev_vel) / (dt);
+  control_vel = (Kp_vel * error_vel) + (Ki_vel * err_int_vel) + (Kd_vel * err_der_vel);
+  err_prev_vel = error_vel;
+
+  float U_right = -(control_pitch+control_vel);
+  float U_left = -(control_pitch+control_vel);
+
+  // Constrain to valid PWM range
+  U_right = constrain(U_right, -MAX_PWM, MAX_PWM);
+  U_left = constrain(U_left, -MAX_PWM, MAX_PWM);
   
-  // Scale the control signal
-  // Option 1: Direct scaling
-  int U_int = (int)(U_balance * 90);  // Multiply by 100 to preserve precision
-  
-  // Step 2: Constrain to expected input range
-  U_int = constrain(U_int, -600, 600);  // Adjust these limits based on your U_balance range
-  
-  // Step 3: Map to PWM range
-  float U_right = map(U_int, -600, 600, -190, 190);  // Map to ±200 PWM
-  float U_left = U_right;
-  
-  // Option 2: Map method (uncomment to use instead)
-  // int U_int = (int)(U_balance * 100);  // Scale up for better mapping
-  // float U_right = map(constrain(U_int, -400, 400), -400, 400, -200, 200);
-  // float U_left = U_right;
-  
-  // Apply motor commands
+  // Send to motors
   setMotorSpeed(true, U_right);
   setMotorSpeed(false, U_left);
   
-  // Debug output
-  Serial.print("x1:");
+  // ========================================
+  // Debug Output
+  // ========================================
+  /*Serial.print("Pos:");
   Serial.print(x1, 3);
-  Serial.print(" x2:");
-  Serial.print(x2 * 180.0 / PI, 2);  // Print angle in degrees
-  Serial.print(" x3:");
-  Serial.print(x3, 3);
-  Serial.print(" x4:");
-  Serial.print(x4, 3);
-  Serial.print(" U:");
-  Serial.println(U_balance, 2);
+  Serial.print(" Pos_err:");
+  Serial.print(position_error, 3);
+  Serial.print(" Pitch:");
+  Serial.print(x2 * 180.0 / PI, 2);  // degrees
+  Serial.print(" Pitch_sp:");
+  Serial.print(pitch_setpoint * 180.0 / PI, 2);  // degrees
+  Serial.print(" Pitch_err:");
+  Serial.print(pitch_error * 180.0 / PI, 2);  // degrees
+  Serial.print(" PWM:");
+  Serial.println(U_right);*/
 }
 
 void setup() {
-  Serial.begin(115200);  // Changed to 115200 for faster serial
+  Serial.begin(115200);
   Wire.begin();
   
   // Initialize MPU6050
   byte status = mpu.begin();
   if (status != 0) {
-    Serial.print("MPU6050 connection failed! Status: ");
-    Serial.println(status);
+    //Serial.print("MPU6050 connection failed! Status: ");
+    //Serial.println(status);
     while (1) {
       digitalWrite(buzz, HIGH);
       delay(100);
@@ -203,18 +237,20 @@ void setup() {
     }
   }
   
-  Serial.println("MPU6050 connected!");
-  Serial.println("Calibrating... Keep robot still!");
+  //Serial.println("MPU6050 connected!");
+  //Serial.println("Calibrating... Keep robot still!");
   
-  mpu.calcOffsets();  // Calibrate gyro and accelerometer
+  mpu.calcOffsets();
   
-  Serial.println("Calibration complete!");
+  //Serial.println("Calibration complete!");
   
-  // Find zero angle - hold robot upright and uncomment these lines:
-  // delay(2000);
-  // angleZeroY = mpu.getAngleY();
-  // Serial.print("Zero angle set to: ");
-  // Serial.println(angleZeroY);
+  // Calibrate zero angle
+  delay(2000);
+  Serial.println("Hold robot upright NOW!");
+  delay(2000);
+  angleZeroY = mpu.getAngleY();
+  Serial.print("Zero angle set to: ");
+  Serial.println(angleZeroY);
   
   // Encoder pins
   pinMode(encodPinAL, INPUT_PULLUP);
@@ -238,7 +274,7 @@ void setup() {
   
   // Initialize timers
   imuTimer = millis();
-  printTimer = millis();
+  controlTimer = millis();
   prev_time = millis();
   
   // Beep to indicate ready
@@ -246,24 +282,25 @@ void setup() {
   delay(200);
   digitalWrite(buzz, LOW);
   
-  Serial.println("Self-Balancing Robot Ready!");
+  Serial.println("2-Loop Cascade PID Ready!");
+  Serial.println("Outer: Position PID | Inner: Pitch PID");
 }
 
 void loop() {
   unsigned long now = millis();
   
-  // 1) Always service encoders (runs every loop iteration for accurate counting)
+  // Always service encoders
   updateEncoders();
   
-  // 2) IMU update every 5 ms (200 Hz)
+  // IMU update every 5 ms (200 Hz)
   if (now - imuTimer >= 5) {
     imuTimer = now;
     getimu();
   }
   
-  // 3) Control update every 10 ms (100 Hz)
-  if (now - printTimer >= 10) {
-    printTimer = now;
-    computeLQRControl();
+  // Control update every 10 ms (100 Hz)
+  if (now - controlTimer >= 10) {
+    controlTimer = now;
+    computeCascadePID();
   }
 }

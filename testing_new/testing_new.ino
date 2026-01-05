@@ -47,13 +47,13 @@ int prevA_left = LOW;
 // ===== PID PARAMETERS =====
 
 // Velocity PID (start with these, tune as needed)
-float Kp_vel = 40.0;      
+float Kp_vel = 0.0;      
 float Ki_vel = 0.0;     
 float Kd_vel = 0.0;      
 // Pitch PID 
 float Kp_pitch = 4300.0;   
-float Ki_pitch = 0.0;    
-float Kd_pitch = 100.0;    
+float Ki_pitch = 150;    
+float Kd_pitch = 80;    
 
 // Setpoints
 float vel_setpoint = 0.0;    
@@ -83,7 +83,7 @@ float x3 = 0.0;  // Average wheel velocity (rad/s)
 float x4 = 0.0;  // Body pitch rate (rad/s)
 
 // MPU offset
-float angleZeroY = 0.0;
+//float angleZeroY = 0.0;
 
 
 
@@ -91,7 +91,7 @@ void getimu() {
   mpu.update();
   
   // Get pitch angle and angular velocity
-  x2 = (mpu.getAngleY() - angleZeroY) * PI / 180.0;  // Body pitch angle (rad)
+  x2 = (mpu.getAngleY()) * PI / 180.0;  // Body pitch angle (rad)
   x4 = mpu.getGyroY() * PI / 180.0;                   // Body pitch rate (rad/s)
   //Serial.print(x2);
   //Serial.print(",");
@@ -136,7 +136,7 @@ void calculateVelocity() {
   
   // Update state variables
   x3 = (vel_right + vel_left) / 2.0;  // Average velocity
-  x1 += x3 * DT;  // Integrate to get position
+  //x1 += x3 * DT;  // Integrate to get position
   
   // Optional: Limit position drift (uncomment if needed)
   // x1 = constrain(x1, -10.0, 10.0);
@@ -185,7 +185,7 @@ void computeCascadePID() {
   err_int_pitch += (error_pitch * DT);
   
   // Anti-windup for pitch integral
-  err_int_pitch = constrain(err_int_pitch, -MAX_INT_PITCH, MAX_INT_PITCH);
+  //err_int_pitch = constrain(err_int_pitch, -MAX_INT_PITCH, MAX_INT_PITCH);
   
   err_der_pitch = -x4;
   control_pitch = (Kp_pitch * error_pitch) + (Ki_pitch * err_int_pitch) + (Kd_pitch * err_der_pitch);
@@ -196,7 +196,7 @@ void computeCascadePID() {
   err_int_vel += (error_vel * DT);
   
   // Anti-windup for velocity integral
-  err_int_vel = constrain(err_int_vel, -MAX_INT_VEL, MAX_INT_VEL);
+  //err_int_vel = constrain(err_int_vel, -MAX_INT_VEL, MAX_INT_VEL);
   
   err_der_vel = (error_vel - err_prev_vel) / DT;
   control_vel = (Kp_vel * error_vel) + (Ki_vel * err_int_vel) + (Kd_vel * err_der_vel);
@@ -225,7 +225,7 @@ void computeCascadePID() {
   */
 }
 
-void setup() {
+void setup() 
 {
   Serial.begin(115200);
   Wire.begin();
@@ -237,6 +237,7 @@ void setup() {
   // Sample the upright angle
   mpu.calcOffsets();
   delay(1000);
+  
   // Encoder pins
   pinMode(encodPinAL, INPUT_PULLUP);
   pinMode(encodPinBL, INPUT_PULLUP);
@@ -273,7 +274,7 @@ void setup() {
   servo1.write(0);
   servo2.write(0);
 
-}
+
 }
 
 void loop() {
@@ -288,14 +289,14 @@ void loop() {
     getimu();
   }
   
-  // Encoder velocity calculation every 10 ms 
+  // Encoder velocity 
   if (now - encoderTimer >= 10) {
     encoderTimer = now;
     calculateVelocity();
   }
   
   // Control update every 10 ms (100 Hz)
-  if (now - controlTimer >= 10) {
+  if (now - controlTimer >= 6) {
     controlTimer = now;
     computeCascadePID();
   }

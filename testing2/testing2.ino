@@ -1,17 +1,12 @@
 #include <Wire.h>
 #include <MPU6050_light.h>
 #include <Servo.h>
-#include <Encoder.h>
-
 
 // Create Servo objects (if needed for future use)
 Servo servo1;
 Servo servo2;
 
 MPU6050 mpu(Wire);
-Encoder encoder_right(8, 7);  // assuming encoder 1 ( 7,8 ) are channel a and b
-Encoder encoder_left(2, 3);   // Left encoder pins A, B
-
 
 // Pin definitions
 #define encodPinAR 8
@@ -36,7 +31,7 @@ const float DT = 0.01f;  // 10ms loop time
 unsigned long imuTimer = 0;
 unsigned long controlTimer = 0;
 unsigned long encoderTimer = 0;
-unsigned long lastUpdateTime=0;
+unsigned long lastUpdateTime;
 
 // Motor Parameters
 const float MAX_PWM = 255.0;
@@ -93,34 +88,71 @@ float x4 = 0.0;  // Body pitch rate (rad/s)
 
 
 
-
-
-void updatesensor() {
- 
-
+void getimu() {
   mpu.update();
   
   // Get pitch angle and angular velocity
   x2 = (mpu.getAngleY()) * PI / 180.0;  // Body pitch angle (rad)
   x4 = mpu.getGyroY() * PI / 180.0;                   // Body pitch rate (rad/s)
+  //Serial.print(x2);
+  //Serial.print(",");
+  //Serial.println(x4);
+}
 
-  long curr_encoder_right = encoder_right.read();
-  long curr_encoder_left = encoder_left.read();
+void updateEncoders() {
+  // Right encoder
+  int aR = digitalRead(encodPinAR);
+  if (prevA_right == LOW && aR == HIGH) {
+    if (digitalRead(encodPinBR) == HIGH) {
+      wheel_pulse_count_right++;
+    } else {
+      wheel_pulse_count_right--;
+    }
+  }
+  prevA_right = aR;
+
+  // Left encoder
+  int aL = digitalRead(encodPinAL);
+  if (prevA_left == LOW && aL == HIGH) {
+    if (digitalRead(encodPinBL) == HIGH) {
+      wheel_pulse_count_left--;
+    } else {
+      wheel_pulse_count_left++;
+    }
+  }
+  prevA_left = aL;
+}
+
+void calculateVelocity() {
+  long curr_encoder_right = wheel_pulse_count_right;
+  long curr_encoder_left = wheel_pulse_count_left;
   
-  x3 = ((curr_encoder_right-prev_encoder_right)+(curr_encoder_left - prev_encoder_left)) / (2.0*DT);  // Average velocity
-  //x3= ((enc_A - enc_A_prev) + (enc_B - enc_B_prev)) / (2*dt);
+  // Angular displacement (rad)
+  float delta_right = (curr_encoder_right - prev_encoder_right) * 2.0 * PI / COUNTS_PER_REV;
+  float delta_left = (curr_encoder_left - prev_encoder_left) * 2.0 * PI / COUNTS_PER_REV;
+  
+  // Angular velocities (rad/s)
+  float vel_right = delta_right / DT;
+  float vel_left = delta_left / DT;
+  
+  // Update state variables
+  x3 = (vel_right + vel_left) / 2.0;  // Average velocity
   //x1 += x3 * DT;  // Integrate to get position
+  
+  // Optional: Limit position drift (uncomment if needed)
+  // x1 = constrain(x1, -10.0, 10.0);
+  
   // Store previous values
   prev_encoder_right = curr_encoder_right;
   prev_encoder_left = curr_encoder_left;
 }
-
 
 void setMotorSpeed(bool isRight, float speed) {
   int pwm_pin = isRight ? MOTOR_R_PWM : MOTOR_L_PWM;
   int dir_pin1 = isRight ? MOTOR_R_DIR1 : MOTOR_L_DIR1;
   int dir_pin2 = isRight ? MOTOR_R_DIR2 : MOTOR_L_DIR2;
   
+  speed = constrain(speed, -MAX_PWM, MAX_PWM);
   
   if (speed >= 0) {
     digitalWrite(dir_pin1, LOW);
@@ -146,6 +178,9 @@ void computeCascadePID() {
     err_int_vel = 0.0;
     return;
   }
+  
+  
+  
   // ===== PITCH PID (Inner Loop) =====
   error_pitch = pitch_setpoint - x2;
   err_int_pitch += (error_pitch * DT);
@@ -249,13 +284,25 @@ void setup()
 
 void loop() {
   unsigned long now = millis();
-
-  if((now-lastUpdateTime >= 10))
-  {
-    lastUpdateTime = now;
-    updatesensor();
-    computeCascadePID();
-   
+  
+  // Always service encoders (read on every loop)
+  updateEncoders();
+  
+  // IMU update every 5 ms (200 Hz)
+  if (now - imuTimer >= 3) {
+    imuTimer = now;
+    getimu();
   }
-
+  
+  // Encoder velocity 
+  if (now - encoderTimer >= 10) {
+    encoderTimer = now;
+    calculateVelocity();
+  }
+  
+  // Control update every 10 ms (100 Hz)
+  if (now - controlTimer >= 6) {
+    controlTimer = now;
+    computeCascadePID();
+  }
 }

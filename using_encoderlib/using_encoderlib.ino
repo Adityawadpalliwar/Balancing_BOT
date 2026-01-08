@@ -72,7 +72,10 @@ void updateEncoders() {
     // Read encoder counts (Encoder library handles everything automatically)
     long curr_encoder_right = encoder_right.read();
     long curr_encoder_left = encoder_left.read();
-    
+    Serial.print(curr_encoder_right);
+    Serial.print(",");
+    Serial.println(curr_encoder_right);
+
     // Calculate velocities (rad/s)
     float delta_right = (curr_encoder_right - prev_encoder_right)  * 2.0* PI / COUNTS_PER_REV;
     float delta_left = (curr_encoder_left - prev_encoder_left) * 2.0* PI/ COUNTS_PER_REV;
@@ -173,10 +176,10 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
 
-  unsigned long current_time = micros();
+  unsigned long current_time = millis();
   
   // Run control loop at fixed rate (100Hz)
-  if (current_time - last_loop_time >= DT * 1000000) {
+  if (current_time - last_loop_time >= 10) {
     last_loop_time = current_time;
   
   getimu();

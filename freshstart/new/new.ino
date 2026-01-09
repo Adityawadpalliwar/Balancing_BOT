@@ -57,9 +57,9 @@ float Kp_vel = 0.0;
 float Ki_vel = 0.0;     
 float Kd_vel = 0.0;      
 // Pitch PID 
-float Kp_pitch = 2300.0;   
+float Kp_pitch = 5000.0;   
 float Ki_pitch = 0;    
-float Kd_pitch = 12;    
+float Kd_pitch = 0;    
 
 // Setpoints
 float vel_setpoint = 0.0;    

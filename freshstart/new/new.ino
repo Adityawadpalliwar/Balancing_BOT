@@ -8,6 +8,7 @@
 Servo servo1;
 Servo servo2;
 
+
 MPU6050 mpu(Wire);
 Encoder encoder_right(8, 7);  // assuming encoder 1 ( 7,8 ) are channel a and b
 Encoder encoder_left(2, 3);   // Left encoder pins A, B
@@ -57,9 +58,9 @@ float Kp_vel = 0.0;
 float Ki_vel = 0.0;     
 float Kd_vel = 0.0;      
 // Pitch PID 
-float Kp_pitch = 5000.0;   
-float Ki_pitch = 0;    
-float Kd_pitch = 0;    
+float Kp_pitch = 5440.0;   
+float Ki_pitch = 0.000;    
+float Kd_pitch = 0.15;    
 
 // Setpoints
 float vel_setpoint = 0.0;    
@@ -92,17 +93,15 @@ float x4 = 0.0;  // Body pitch rate (rad/s)
 //float angleZeroY = 0.0;
 
 
-
-
-
-void updatesensor() {
+void updatesensor() 
+{
  
 
   mpu.update();
   
   // Get pitch angle and angular velocity
   x2 = (mpu.getAngleY()) * PI / 180.0;  // Body pitch angle (rad)
-  x4 = mpu.getGyroY() * PI / 180.0;                   // Body pitch rate (rad/s)
+  x4 = (mpu.getGyroY()) * PI / 180.0;                   // Body pitch rate (rad/s)
 
   long curr_encoder_right = encoder_right.read();
   long curr_encoder_left = encoder_left.read();
@@ -123,13 +122,14 @@ void setMotorSpeed(bool isRight, float speed) {
   
   
   if (speed >= 0) {
+    analogWrite(pwm_pin, (int)abs(speed));
     digitalWrite(dir_pin1, LOW);
     digitalWrite(dir_pin2, HIGH);
-    analogWrite(pwm_pin, (int)abs(speed));
+    
   } else {
+    analogWrite(pwm_pin, (int)abs(speed));
     digitalWrite(dir_pin1, HIGH);
     digitalWrite(dir_pin2, LOW);
-    analogWrite(pwm_pin, (int)abs(speed));
   }
 }
 
@@ -153,7 +153,8 @@ void computeCascadePID() {
   // Anti-windup for pitch integral
   //err_int_pitch = constrain(err_int_pitch, -MAX_INT_PITCH, MAX_INT_PITCH);
   
-  err_der_pitch = -x4;
+  //err_der_pitch = -x4;
+  err_der_pitch= (error_pitch - err_prev_pitch)/DT;// got an alternative for der
   control_pitch = (Kp_pitch * error_pitch) + (Ki_pitch * err_int_pitch) + (Kd_pitch * err_der_pitch);
   err_prev_pitch = error_pitch;
 
@@ -250,7 +251,7 @@ void setup()
 void loop() {
   unsigned long now = millis();
 
-  if((now-lastUpdateTime >= 10))
+  if((now-lastUpdateTime >= DT*1000))
   {
     lastUpdateTime = now;
     updatesensor();

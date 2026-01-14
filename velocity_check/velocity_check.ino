@@ -23,7 +23,7 @@ const int PPR = 600;               // pulses per revolution
 const float WHEEL_RADIUS = 0.03;   // meters
 
 /**************** CONTROL ****************/
-int testPWM = 120;   // SAME PWM for both motors
+int testPWM = 250;   // SAME PWM for both motors
 float tolerance = 0.02; // m/s allowed difference
 
 /**************** ISR ****************/
@@ -48,7 +48,15 @@ void setup() {
   pinMode(ENCODER_R_A, INPUT_PULLUP);
 
   attachInterrupt(digitalPinToInterrupt(ENCODER_L_A), encoderL_ISR, RISING);
-  attachInterrupt(digitalPinToInterrupt(ENCODER_R_A), encoderR_ISR, RISING);
+  //attachInterrupt(digitalPinToInterrupt(ENCODER_R_A), encoderR_ISR, RISING);
+  
+  
+
+  // Enable Pin Change Interrupts for PORTB
+  PCICR |= (1 << PCIE0);      // Enable PCINT for PORTB
+  PCMSK0 |= (1 << PCINT0);    // Enable PCINT0 (Pin 8)
+
+  sei();  // Enable global interrupts
 
   // Same direction for both motors
   digitalWrite(DIR_L, HIGH);
